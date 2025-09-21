@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Doce Baunilha — Cardápio (Pagamento PagSeguro / PIX)</title>
+  <title>Doce Baunilha — Cardápio </title>
   <style>
     :root{--accent:#f08a5d;--muted:#666}
     *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
@@ -24,7 +24,8 @@
     .muted{color:var(--muted);font-size:13px}
     input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #e6e6e6;margin-bottom:8px}
     .small{font-size:13px}
-    #pixQr{margin-top:10px;text-align:center;}
+    #pixInfo{margin-top:10px;text-align:center;padding:10px;border-radius:8px;background:#fff6f1;border:1px dashed rgba(240,138,93,0.4)}
+    .pix-key{font-weight:700;font-size:18px;letter-spacing:1px}
     footer{padding:14px;text-align:center;color:var(--muted);font-size:13px;margin-top:24px}
     @media(max-width:920px){.grid{grid-template-columns:1fr}.container{padding:12px}}
   </style>
@@ -32,7 +33,7 @@
 <body>
   <header>
     <h1>Doce Baunilha — Pedido Direto</h1>
-    <div class="small">Pagamento: PagSeguro / PIX • Frete por CEP</div>
+    <div class="small">Pagamento: PIX • Frete por CEP</div>
   </header>
 
   <main class="container">
@@ -80,11 +81,14 @@
         <textarea id="address" rows="2" placeholder="Rua, número, bairro, complemento"></textarea>
 
         <div style="display:flex;gap:8px;margin-top:8px">
-          <button id="finalizeBtn">Finalizar (PagSeguro)</button>
-          <button id="showPix">Pix</button>
+          <button id="copyPixBtn">Copiar chave PIX</button>
+          <button id="copyTotalBtn">Copiar valor total</button>
         </div>
 
-        <div id="pixQr"></div>
+        <div id="pixInfo">
+          <div class="muted small">Chave PIX para pagamento (copie e cole no seu app bancário)</div>
+          <div style="margin-top:6px" class="pix-key" id="pixKeyDisplay">15996380084</div>
+        </div>
 
         <div style="margin-top:10px">
           <button id="sendWhats">Enviar pedido por WhatsApp</button>
@@ -100,15 +104,10 @@
     <footer>Hospede no GitHub Pages / Hostinger / No-IP — me diga se quer ZIP pra baixar</footer>
   </main>
 
-  <!-- QRCode.js (gera o QR code do PIX) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
 <script>
 /* ================== CONFIGURAÇÕES ================== */
-const myWhats = '5515996380084'; // seu WhatsApp
-const pixKey = '5515996380084';
-const pagseguroEmail = 'alineschmitz122@gmail.com';
-const pagseguroToken = '03da0411-0754-47aa-ae57-b5832cd9906423bc3b6f4b13ac8c764289bbd2219a2db6c0-7b5b-479f-956f-fad9692e8074';
+const myWhats = '5515996380084'; // seu WhatsApp (com DDI + DDD)
+const pixKeyVisible = '15996380084'; // chave PIX que o cliente deve copiar
 
 /* ================== FRETE ================== */
 const FRETE_TABLE = {
@@ -155,7 +154,7 @@ const freteEl = document.getElementById('frete');
 const totalEl = document.getElementById('total');
 const cepInput = document.getElementById('cep');
 const freteInfo = document.getElementById('freteInfo');
-const pixQrEl = document.getElementById('pixQr');
+const pixKeyDisplay = document.getElementById('pixKeyDisplay');
 
 let cart = {};
 let currentFrete = 0;
@@ -217,6 +216,8 @@ function renderCart(){
   subtotalEl.innerText=money(subtotal);
   freteEl.innerText=money(currentFrete);
   totalEl.innerText=money(subtotal+currentFrete);
+  // atualiza valor exibido para copiar
+  document.getElementById('copyTotalBtn').dataset.amount = money(subtotal+currentFrete);
 }
 
 /* ================== FRETE ================== */
@@ -239,41 +240,35 @@ cepInput.addEventListener('input', ()=>{
   renderCart();
 });
 
-/* ================== PAGSEGURO ================== */
-function openPagSeguroCheckout(){
-  const subtotal = calculateSubtotal();
-  if(subtotal<=0){ alert('Carrinho vazio'); return; }
-  const itens=[];
-  for(const id in cart){ const p=PRODUCTS.find(x=>x.id===id); itens.push(`${p.name} x${cart[id]}`); }
-  const descricao = `Pedido Doce Baunilha - ${itens.join(' | ')}`;
-  const total = subtotal+currentFrete;
-  const amountStr = total.toFixed(2);
+/* ================== PIX - copiar chave/valor ================== */
+pixKeyDisplay.innerText = pixKeyVisible;
 
-  const form=document.createElement('form');
-  form.method='POST';
-  form.action='https://ws.pagseguro.uol.com.br/v2/checkout';
-  form.style.display='none';
-
-  const addField=(name,value)=>{ const inp=document.createElement('input'); inp.type='hidden'; inp.name=name; inp.value=value; form.appendChild(inp); };
-  addField('email',pagseguroEmail); addField('token',pagseguroToken); addField('currency','BRL');
-  addField('itemId1','0001'); addField('itemDescription1',descricao.substring(0,100));
-  addField('itemAmount1',amountStr); addField('itemQuantity1','1');
-  const ref=`pedido_${Date.now()}`; addField('reference',ref);
-
-  document.body.appendChild(form);
-  alert('Você será redirecionado ao PagSeguro.');
-  form.submit();
+function copyToClipboard(text){
+  if(!navigator.clipboard) return fallbackCopy(text);
+  return navigator.clipboard.writeText(text);
+}
+function fallbackCopy(text){
+  const ta = document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} ta.remove();
 }
 
-/* ================== PIX COM QR CODE ================== */
-function showPixInfo(){
-  const total = (calculateSubtotal()+currentFrete).toFixed(2);
-  if(Number(total)==0){ alert('Carrinho vazio'); return; }
-  pixQrEl.innerHTML=''; // limpa
-  const pixPayload = `00020126360014BR.GOV.BCB.PIX0114${pixKey}520400005303986540${total.replace('.',',')}5802BR5913Doce Baunilha6009Votorantim62070503***6304`; // simplificado
-  new QRCode(pixQrEl,{text:pixPayload,width:180,height:180});
-  alert(`Total: R$ ${total}\nEscaneie o QR Code exibido para pagar.`);
-}
+document.getElementById('copyPixBtn').addEventListener('click', ()=>{
+  copyToClipboard(pixKeyVisible).then(()=>{
+    alert('Chave PIX ' + pixKeyVisible + ' copiada para a área de transferência.');
+  }).catch(()=>{
+    fallbackCopy(pixKeyVisible);
+    alert('Chave PIX copiada (fallback).');
+  });
+});
+
+document.getElementById('copyTotalBtn').addEventListener('click', ()=>{
+  const amount = document.getElementById('copyTotalBtn').dataset.amount || '0.00';
+  copyToClipboard(amount).then(()=>{
+    alert('Valor total R$ ' + amount + ' copiado para a área de transferência.');
+  }).catch(()=>{
+    fallbackCopy(amount);
+    alert('Valor total copiado (fallback).');
+  });
+});
 
 /* ================== WHATSAPP ================== */
 function sendWhats(){
@@ -288,14 +283,12 @@ function sendWhats(){
   text+=`%0AFrete: R$ ${money(currentFrete)}%0A`;
   text+=`%0ATotal: R$ ${money(subtotal+currentFrete)}%0A`;
   if(address) text+=`%0AEndereco: ${encodeURIComponent(address)}%0A`;
+  text+=`%0AChave PIX para pagamento: ${encodeURIComponent(pixKeyVisible)}%0A`;
   text+=`%0AEnvio por site proprio.`;
   const url=`https://wa.me/${myWhats}?text=${text}`;
   window.open(url,'_blank');
 }
 
-/* ================== EVENTOS ================== */
-document.getElementById('finalizeBtn').addEventListener('click', openPagSeguroCheckout);
-document.getElementById('showPix').addEventListener('click', showPixInfo);
 document.getElementById('sendWhats').addEventListener('click', sendWhats);
 
 /* inicializa */
@@ -304,7 +297,3 @@ renderCart();
 </script>
 </body>
 </html>
-
-
-
-
